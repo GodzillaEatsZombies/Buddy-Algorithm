@@ -745,6 +745,31 @@ def test_case_29():
     assert response.status_code == 404, "Test Case 29 Failed"
     print("Test Case 29 Passed")
 
+# Test case 30: Payload for invalid destination and invalid package 
+def test_case_30():
+    # Payload with invalid destination and invalid package
+    payload = {
+        "destination": "Narnia",  # Nonexistent destination
+        "language": "English", 
+        "keywords": "fantasy, nature",
+        "event": "Outdoor Adventure",  # Valid event
+        "package": "Mythical Guide Buddy"  # Invalid package
+    }
+
+    response = send_buddy_request(payload)
+
+    # Enhanced logging for debugging
+    print("Test Case 30:")
+    print(f"Payload: {payload}")
+    print(f"Status Code: {response.status_code}")
+    print(f"Response Text: {response.text}")
+
+    # Expecting a 404 status code due to invalid destination and package
+    assert response.status_code == 404, "Test Case 30 Failed"
+    assert "No buddies found" in response.text, "Test Case 30 Failed"
+
+
+
 # Run the tests for now
 if __name__ == "__main__":
     test_case_1()  # This one is already passing 
@@ -776,5 +801,5 @@ if __name__ == "__main__":
     test_case_27() # This one is already passing
     test_case_28() # This one is already passing
     test_case_29() # This one is already passing
-
+    test_case_30() # This one is already passing
     
