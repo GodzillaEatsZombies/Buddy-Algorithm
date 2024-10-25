@@ -769,6 +769,30 @@ def test_case_30():
     assert "No buddies found" in response.text, "Test Case 30 Failed"
 
 
+# Test case 31: Payload with valid destination, event, and package, but invalid keywords
+def test_case_31():
+    # Payload with valid destination, event, and package, but invalid keywords
+    payload = {
+        "destination": "Rome",  # Valid destination
+        "language": "Italian",  # Valid language
+        "keywords": "alien invasion",  # Invalid keywords for buddies
+        "event": "Cultural Tour",  # Valid event
+        "package": "Historical Explorer Buddy"  # Valid package
+    }
+
+    response = send_buddy_request(payload)
+
+    # Enhanced logging for debugging
+    print("Test Case 31:")
+    print(f"Payload: {payload}")
+    print(f"Status Code: {response.status_code}")
+    print(f"Response Text: {response.text}")
+
+    # Expecting a 404 status code due to invalid keywords
+    assert response.status_code == 404, "Test Case 31 Failed"
+    assert "No buddies found" in response.text, "Test Case 31 Failed"
+
+
 
 # Run the tests for now
 if __name__ == "__main__":
@@ -802,4 +826,5 @@ if __name__ == "__main__":
     test_case_28() # This one is already passing
     test_case_29() # This one is already passing
     test_case_30() # This one is already passing
+    test_case_31() # This one is already passing
     
