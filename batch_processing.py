@@ -1,102 +1,92 @@
-# Import necessary libraries
 import pandas as pd
 import logging
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.model_selection import train_test_split
 
-# Set up logging
+# Set up logging configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Define the buddy-matching function
-def find_best_buddies(request, df):
-    logger.info("Starting buddy matching with request: %s", request)
-    
-    scored_buddies = []
-    for index, buddy in df.iterrows():
+# Load buddy profiles and test scenarios
+try:
+    buddy_profiles = pd.read_excel("Dummy-Buddy-Profiles-Batch1.xlsx")
+    test_scenarios = pd.read_excel("Buddy-Matching-Test-Scenarios.xlsx")
+    logger.info("Loaded buddy profiles and test scenarios successfully.")
+except FileNotFoundError as e:
+    logger.error(f"File not found: {e}")
+    raise
+
+# Data Transformation
+buddy_profiles_expanded = buddy_profiles.copy()
+
+# Split dataset into training and testing sets (80/20 split)
+train_profiles, test_profiles = train_test_split(buddy_profiles_expanded, test_size=0.2, random_state=42)
+
+# Helper function to retrieve synonyms (simplified example)
+def get_synonyms(keyword):
+    synonyms = {
+        "weed": ["420 friendly", "cannabis"],
+        "music": ["nightlife", "concert"]
+        # Add more synonym mappings here
+    }
+    return synonyms.get(keyword, [keyword])
+
+# Define the matching function
+def find_best_buddies(request, profiles):
+    matching_scores = []
+    for idx, profile in profiles.iterrows():
         score = 0
-        if buddy.get(f'Dest_{request["destination"]}', False):
-            score += 50
-        if buddy.get(f'UserLang_{request["language"]}', False):
-            score += 30
-        if buddy.get(f'LocalLang_{request["local_language"]}', False):
+        # Scoring based on each field in the request (simplified)
+        if request['destination'] == profile.get('Destination'):
             score += 20
-        if any(buddy.get(f'Event_{event.strip()}', False) for event in request["keywords"].split(',')):
+        if request['language'] == profile.get('User Language'):
+            score += 20
+        if request['local_language'] == profile.get('Local Language'):
+            score += 20
+        if any(keyword in profile.get('Keywords', '').split(',') for keyword in request['keywords'].split(',')):
+            score += 20
+        if request['event'] == profile.get('Event'):
             score += 10
-        if buddy.get(f'Package_{request["package"]}', False):
-            score += 5
-        if score > 0:
-            scored_buddies.append((index, score))
+        if request['package'] == profile.get('Package'):
+            score += 10
+        matching_scores.append((idx, score))
     
-    scored_buddies.sort(key=lambda x: x[1], reverse=True)
-    top_buddies = scored_buddies[:5]
-    
-    logger.info("Top 5 matching buddies found.")
-    for idx, (buddy_index, score) in enumerate(top_buddies, start=1):
-        logger.info("Buddy index: %d, Score: %d", buddy_index, score)
-    
-    return [index for index, _ in top_buddies]
+    # Sort by score in descending order and pick the top matches
+    top_matches = sorted(matching_scores, key=lambda x: x[1], reverse=True)[:5]
+    return [idx for idx, score in top_matches]
 
-# Function to process each batch and save results
-def process_batch(df, request, y_true=None):
-    # Find top buddies based on the request
-    top_buddies_indices = find_best_buddies(request, df)
-    detailed_top_buddies = df.loc[top_buddies_indices]
-    
-    # Dynamically select relevant columns to display
-    display_columns = [
-        f'Dest_{request["destination"]}',
-        f'UserLang_{request["language"]}',
-        f'LocalLang_{request["local_language"]}',
-        f'Event_{request["event"]}',
-        f'Package_{request["package"]}'
-    ]
-    display_columns = [col for col in display_columns if col in detailed_top_buddies.columns]
-    
-    # Save the top matching buddies to a CSV
+# Initialize the metrics log
+metrics_log = []
+
+# Process each test scenario
+for i, request in test_scenarios.iterrows():
     try:
-        detailed_top_buddies[display_columns].to_csv("top_matching_buddies.csv", index=False)
-        logger.info("Top matching buddies have been saved to 'top_matching_buddies.csv'.")
+        logger.info(f"Processing scenario {i + 1} with request: {request.to_dict()}")
+
+        # Find matching buddies for the scenario
+        top_buddies_indices = find_best_buddies(request, buddy_profiles_expanded)
+        detailed_top_buddies = buddy_profiles_expanded.loc[top_buddies_indices]
+
+        # Log the top buddy scores for metrics tracking
+        top_buddy_scores = [score for idx, score in enumerate(top_buddies_indices)]
+        metrics_log.append({
+            "Scenario": i + 1,
+            "Data Size": len(top_buddies_indices),
+            "Top Buddy Scores": top_buddy_scores
+        })
+
+        # Display top matching buddies for each scenario
+        print(f"\nTop Matching Buddies for Scenario {i + 1} (Detailed View):")
+        display_columns = ["Buddy_id", "Destination", "User Language", "Local Language", "Keywords", "Event", "Package"]
+        try:
+            print(detailed_top_buddies[display_columns])
+        except KeyError as e:
+            logger.warning(f"Error displaying detailed columns: {e}")
+            print("Available columns in buddy profiles:", detailed_top_buddies.columns.tolist())
+
     except Exception as e:
-        print("Error saving top buddies to CSV:", e)
+        logger.error(f"Error processing scenario {i + 1}: {e}")
 
-    # If there is a ground truth provided, calculate metrics
-    if y_true is not None:
-        y_pred = [1 if i in top_buddies_indices else 0 for i in range(len(df))]
-        
-        # Compute metrics
-        accuracy = accuracy_score(y_true, y_pred)
-        precision = precision_score(y_true, y_pred, zero_division=1)
-        recall = recall_score(y_true, y_pred, zero_division=1)
-        f1 = f1_score(y_true, y_pred, zero_division=1)
-        
-        logger.info("Batch Metrics - Accuracy: %.2f, Precision: %.2f, Recall: %.2f, F1 Score: %.2f",
-                    accuracy, precision, recall, f1)
-
-# Sample request
-request = {
-    "destination": "Paris",
-    "language": "English",
-    "local_language": "French",
-    "keywords": "food,history",
-    "event": "Art Exhibit",
-    "package": "Shopping Enthusiast"
-}
-
-# Load the entire dataset
-file_path = 'ML_Training_Dataset_500.xlsx'
-full_df = pd.read_excel(file_path)
-
-# 80/20 train-test split
-train_df, test_df = train_test_split(full_df, test_size=0.2, random_state=42)
-
-# Example ground truth (replace with actual labels if available)
-y_true_train = [1 if i < len(train_df) // 2 else 0 for i in range(len(train_df))]  # Dummy example
-y_true_test = [1 if i < len(test_df) // 2 else 0 for i in range(len(test_df))]    # Dummy example
-
-# Process the training and test sets
-logger.info("Processing training set:")
-process_batch(train_df, request, y_true_train)
-
-logger.info("Processing test set:")
-process_batch(test_df, request, y_true_test)
+# Convert metrics log to DataFrame for review
+metrics_df = pd.DataFrame(metrics_log)
+print("\nPerformance Metrics for Test Scenarios:")
+print(metrics_df)
